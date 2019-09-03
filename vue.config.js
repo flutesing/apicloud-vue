@@ -3,71 +3,57 @@ const path  = require('path');
 const glob  = require('glob');
 const fs    = require('fs');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
-const default_template = './src/public/index.html';
-const defined_template = [
+const globurl = 'src/pages/*';
+const default_template = 'src/public/index.html';
+const default_entry = 'src/public/index.js';
 
-];
-const getPages = (() => {
-    const [
-        globEntry,
-        pages,
-        pagesSet
-    ] = [
-        ['./src/pages/entry/**/**.js', 'entry'], // 入口脚本正则
-        Object.create(null),
-        new Set()
-    ]
 
-    const getMultiPageConf = (globRegex, keyName) => {
-        let [fileList, modName, tplName, filename, tempArr] = [glob.sync(globRegex), null, null, null, []]
-        if (fileList.length !== 0) {
-            for (let entry of fileList) {
-                modName = entry.replace(path.extname(entry), '');
-                tplName = entry.replace(path.extname(entry), '.html');
-                tempArr = modName.split('/').splice(4);
-                modName = 'html/' + tempArr.join('/');
-                filename = modName + '.html';
-                // var modName2 = 'html/' + tempArr.join('/') + '.html';
-                if (! fs.existsSync(tplName)) {
-                    if (fs.existsSync(defined_template[modName])) {
-                        tplName = defined_template[modName];
-                    } else {
-                        tplName = default_template;
-                    }
-                }
-                if (pagesSet.has(modName)) {
-                    Object.assign(pages[modName], { [keyName]: entry, 'template': tplName, filename: filename })
-                } else {
-                    Reflect.set(pages, modName, { [keyName]: entry,  'template': tplName,  filename: filename }) && pagesSet.add(modName)
-                }
-            }
-            return true
-        } else {
-            throw new Error('获取多页入口发生错误');
+function getEntries(url) {
+    let entrys = {}
+    glob.sync(url).forEach(item => {
+        let urlArr = item.split('/').splice(-1)
+        let name = urlArr[0]
+        let entry = fs.existsSync('src/pages/' + name + '/' + 'index.js') ? 'src/pages/' + name + '/' + 'index.js' : default_entry;
+        let tpl = fs.existsSync('src/pages/' + name + '/' + 'index.html') ? 'src/pages/' + name + '/' + 'index.html' : default_template;
+        entrys[name] = {
+            entry: entry,
+            template: tpl,
+            filename: name + '.html',
+            title: 'pages-' + name
         }
-    }
-    getMultiPageConf(...globEntry);
-    try {
-        while (getMultiPageConf(...globEntry)) return pages
-    } catch (err) {
-        console.log(err)
-    }
-})();
+    })
+    return entrys
+}
 
-console.log(getPages);
+function getModules(url) {
+    let modules = {}
+    glob.sync(url).forEach(item => {
+        let urlArr = item.split('/').splice(-1)
+            modules[urlArr[0]] = item;
+    })
+    return modules
+}
+
+
+
+let pages = getEntries(globurl)
+let modules = getModules(globurl)
+
+console.log(pages)
+console.log(modules)
 
 const outputDir = '/Users/flutesing/Coding/apicloud/test';
 
 module.exports = {
-    pages : getPages,
+    pages : pages,
 
     chainWebpack: config => {
+        Object.keys(modules).forEach((key) => {
+            config.resolve.alias.set("$"+ key, path.resolve(__dirname, modules[key]))
+        })
 
         config.resolve.alias
         .set("@@",          path.resolve(__dirname, 'src'))
-        .set('@entry',      path.resolve(__dirname, 'src/pages/entry'))
-        .set('@page',       path.resolve(__dirname, 'src/pages/page'))
-        .set('@router',     path.resolve(__dirname, 'src/pages/router'))
         .set('@assets',     path.resolve(__dirname, 'src/assets'))
         .set('@components', path.resolve(__dirname, 'src/lib/components'))
         .set('@config',     path.resolve(__dirname, 'src/config'))
